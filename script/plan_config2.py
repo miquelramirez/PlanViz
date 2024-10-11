@@ -67,6 +67,8 @@ class PlanConfig2:
         self.plan_paths = {}
         self.exec_paths = {}
         self.conflicts  = {}
+        self.agent_assigned_task = {}
+        self.agent_shown_task_arrow = {}
         self.agents:Dict[int, Agent] = {}
         self.makespan:int = -1
         self.cur_tstep:int = self.start_tstep
@@ -187,15 +189,19 @@ class PlanConfig2:
             return
 
         for ag_id, schedule in enumerate(data["actualSchedule"]):
+            self.agent_assigned_task[ag_id] = []
+            self.agent_shown_task_arrow[ag_id] = []
             for ele in schedule.split(","):
                 assign_tstep = int(ele.split(":")[0])
                 if assign_tstep > self.end_tstep:
                     continue
                 task_id = int(ele.split(":")[1])
+                if task_id == -1:
+                    continue
                 if assign_tstep not in self.actual_schedule:
                     self.actual_schedule[assign_tstep] = []
                 self.actual_schedule[assign_tstep].append((task_id, ag_id))
-
+                self.agent_assigned_task[ag_id].append((assign_tstep, task_id))
                 # Only consider the maximum assign timestep
                 assert task_id in self.seq_tasks
                 if self.seq_tasks[task_id].tasks[0].events["assigned"]["timestep"] != math.inf and \
@@ -218,10 +224,12 @@ class PlanConfig2:
 
         assert self.max_seq_num > -1
         for (finish_tstep, ag_id, task_id, nxt_errand_id) in data["events"]:
+            if (finish_tstep > self.end_tstep):
+                continue
             seq_id = nxt_errand_id - 1
             global_task_id = self.max_seq_num * task_id + seq_id
             if finish_tstep not in self.events["finished"]:
-                self.events["finished"][finish_tstep] = {}
+                self.events["finished"][finish_tstep] = {}      
             self.events["finished"][finish_tstep][global_task_id] = ag_id
             self.seq_tasks[task_id].tasks[seq_id].events["finished"]["agent"] = ag_id
             self.seq_tasks[task_id].tasks[seq_id].events["finished"]["timestep"] = finish_tstep
@@ -247,7 +255,7 @@ class PlanConfig2:
             for loc_id in range(loc_num):
                 tloc = (task[2][loc_id * 2], task[2][loc_id * 2 + 1])
                 tobj = self.render_obj(
-                    tid, tloc, "rectangle", TASK_COLORS["unassigned"], tk.DISABLED, 0.05, str(tid)
+                    tid, tloc, "rectangle", TASK_COLORS["unassigned"], tk.DISABLED, 0, str(tid)
                 )
                 tasks.append(Task(tid, tloc, tobj))
             self.seq_tasks[tid] = SequentialTask(tid, tasks, release_tstep)
